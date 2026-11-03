@@ -11,45 +11,17 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - profile: legacy
-            java: "8"
-            artifact_file: ThJumpPads-legacy
-          - profile: legacy
-            java: "11"
-            artifact_file: ThJumpPads-legacy
-          - profile: modern
-            java: "8"
-            artifact_file: ThJumpPads
-          - profile: modern
-            java: "11"
-            artifact_file: ThJumpPads
-          - profile: modern
-            java: "16"
-            artifact_file: ThJumpPads
-          - profile: modern
-            java: "17"
-            artifact_file: ThJumpPads
-          - profile: modern
-            java: "21"
-            artifact_file: ThJumpPads
-          - profile: modern
-            java: "25"
-            artifact_file: ThJumpPads
     permissions:
       contents: read
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Set up Java ${{ matrix.java }}
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: ${{ matrix.java }}
+          java-version: "17"
           cache: maven
 
       - name: Determine build version
@@ -71,52 +43,95 @@ jobs:
           fi
           printf 'version=%s\n' "$project_version" >> "$GITHUB_OUTPUT"
 
-      - name: Build ${{ matrix.profile }} JAR
+      - name: Build legacy JAR
         env:
           PROJECT_VERSION: ${{ steps.project.outputs.version }}
-          PROFILE: ${{ matrix.profile }}
         shell: bash
         run: |
-          mvn --batch-mode --no-transfer-progress \
-            -P"${PROFILE}" \
-            -Drevision="${PROJECT_VERSION}" \
-            -Djava.target=8 \
-            -Dmaven.compiler.source=1.8 \
-            -Dmaven.compiler.target=1.8 \
-            clean package
+          for attempt in 1 2 3; do
+            echo "Legacy build attempt ${attempt}/3"
+            if mvn --batch-mode --no-transfer-progress -U \
+              -Dmaven.wagon.http.retryHandler.count=3 \
+              -Plegacy \
+              -Drevision="${PROJECT_VERSION}" \
+              -Djava.target=8 \
+              -Dmaven.compiler.source=1.8 \
+              -Dmaven.compiler.target=1.8 \
+              clean package; then
+              break
+            fi
+            if [[ "$attempt" -eq 3 ]]; then
+              echo "Legacy build failed after three attempts." >&2
+              exit 1
+            fi
+            sleep "$((attempt * 15))"
+          done
+          legacy_jar="target/ThJumpPads-legacy-${PROJECT_VERSION}.jar"
+          test -f "$legacy_jar"
+          mkdir -p release-files
+          cp "$legacy_jar" release-files/
 
-      - name: Verify JAR
+      - name: Build modern JAR
         env:
           PROJECT_VERSION: ${{ steps.project.outputs.version }}
-          ARTIFACT_FILE: ${{ matrix.artifact_file }}
         shell: bash
         run: |
-          jar_path="target/${ARTIFACT_FILE}-${PROJECT_VERSION}.jar"
-          python3 - "$jar_path" "$PROJECT_VERSION" <<'PY'
+          for attempt in 1 2 3; do
+            echo "Modern build attempt ${attempt}/3"
+            if mvn --batch-mode --no-transfer-progress -U \
+              -Dmaven.wagon.http.retryHandler.count=3 \
+              -Pmodern \
+              -Drevision="${PROJECT_VERSION}" \
+              -Djava.target=8 \
+              -Dmaven.compiler.source=1.8 \
+              -Dmaven.compiler.target=1.8 \
+              clean package; then
+              break
+            fi
+            if [[ "$attempt" -eq 3 ]]; then
+              echo "Modern build failed after three attempts." >&2
+              exit 1
+            fi
+            sleep "$((attempt * 15))"
+          done
+          modern_jar="target/ThJumpPads-${PROJECT_VERSION}.jar"
+          test -f "$modern_jar"
+          cp "$modern_jar" release-files/
+
+      - name: Verify both JARs
+        env:
+          PROJECT_VERSION: ${{ steps.project.outputs.version }}
+        shell: bash
+        run: |
+          python3 - "$PROJECT_VERSION" <<'PY'
           import sys
           import zipfile
 
-          jar_path, project_version = sys.argv[1:]
-          with zipfile.ZipFile(jar_path) as jar:
-              descriptor = jar.read("plugin.yml").decode("utf-8").splitlines()
-              class_file = jar.read("testudio/JumpPads/JumpPadsPlugin.class")
-              entries = set(jar.namelist())
+          project_version = sys.argv[1]
+          artifacts = (
+              f"release-files/ThJumpPads-legacy-{project_version}.jar",
+              f"release-files/ThJumpPads-{project_version}.jar",
+          )
+          for jar_path in artifacts:
+              with zipfile.ZipFile(jar_path) as jar:
+                  descriptor = jar.read("plugin.yml").decode("utf-8").splitlines()
+                  class_file = jar.read("testudio/JumpPads/JumpPadsPlugin.class")
+                  entries = set(jar.namelist())
 
-          if f"version: '{project_version}'" not in descriptor:
-              raise SystemExit("plugin.yml version does not match the project version")
-          if int.from_bytes(class_file[6:8], "big") != 52:
-              raise SystemExit("JAR is not compatible with Java 8 bytecode")
-          if any(name.startswith(("org/sqlite/", "com/mysql/", "com/google/protobuf/")) for name in entries):
-              raise SystemExit("A JDBC library was unexpectedly packaged in the plugin JAR")
-          print(f"Verified {jar_path}: version {project_version}, Java 8 bytecode, no JDBC drivers")
+              if f"version: '{project_version}'" not in descriptor:
+                  raise SystemExit(f"{jar_path}: plugin.yml version does not match the project version")
+              if int.from_bytes(class_file[6:8], "big") != 52:
+                  raise SystemExit(f"{jar_path}: expected Java 8 bytecode")
+              if any(name.startswith(("org/sqlite/", "com/mysql/", "com/google/protobuf/")) for name in entries):
+                  raise SystemExit(f"{jar_path}: a JDBC library was unexpectedly packaged")
+              print(f"Verified {jar_path}")
           PY
 
-      - name: Upload ${{ matrix.profile }} JAR
-        if: matrix.java == '8'
+      - name: Upload both JARs
         uses: actions/upload-artifact@v4
         with:
-          name: ThJumpPads-${{ matrix.profile }}-${{ steps.project.outputs.version }}
-          path: target/${{ matrix.artifact_file }}-${{ steps.project.outputs.version }}.jar
+          name: ThJumpPads-release-${{ steps.project.outputs.version }}
+          path: release-files/*.jar
           if-no-files-found: error
 
   release:
@@ -138,16 +153,10 @@ jobs:
           fi
           printf 'version=%s\n' "${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
 
-      - name: Download legacy JAR
+      - name: Download both JARs
         uses: actions/download-artifact@v4
         with:
-          name: ThJumpPads-legacy-${{ steps.tag.outputs.version }}
-          path: release-files
-
-      - name: Download modern JAR
-        uses: actions/download-artifact@v4
-        with:
-          name: ThJumpPads-modern-${{ steps.tag.outputs.version }}
+          name: ThJumpPads-release-${{ steps.tag.outputs.version }}
           path: release-files
 
       - name: Create GitHub release
