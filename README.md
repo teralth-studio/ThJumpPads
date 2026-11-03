@@ -4,8 +4,8 @@
 
 1. Click on "Download", an Github releases will appear.
 2. Select the jar, depending on your server version.:
-   If your server version is between **1.8 - 1.12.2** download the jar: **ThJumpPads-legacy-(version).jar**
-   If your server version is between **1.13 - 26.3** download the jar: ThJumpPads-(version).jar
+- - If your server version is between **1.8 - 1.12.2** download the jar: **ThJumpPads-legacy-(version).jar**
+- - If your server version is between **1.13 - 26.3** download the jar: ThJumpPads-(version).jar
 3. Place the jar in the `plugins` folder.
 4. Reload the server.
 
