@@ -171,6 +171,7 @@ jobs:
           test -f "$legacy_jar"
           test -f "$modern_jar"
           gh release create "$TAG_NAME" "$legacy_jar" "$modern_jar" \
+            --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --title "ThJumpPads ${RELEASE_VERSION}" \
             --generate-notes
