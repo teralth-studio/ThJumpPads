@@ -28,38 +28,36 @@ jobs:
           java-version: ${{ matrix.java }}
           cache: maven
 
-      - name: Read project version
+      - name: Determine build version
         id: project
         shell: bash
         run: |
-          project_version="$(mvn -q -DforceStdout help:evaluate -Dexpression=project.version)"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            if [[ ! "$GITHUB_REF_NAME" =~ ^v([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?)$ ]]; then
+              echo "Invalid release tag: $GITHUB_REF_NAME" >&2
+              exit 1
+            fi
+            project_version="${BASH_REMATCH[1]}"
+          else
+            project_version="$(mvn -q -DforceStdout help:evaluate -Dexpression=project.version)"
+          fi
           if [[ ! "$project_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
             echo "Invalid project version: $project_version" >&2
             exit 1
           fi
           printf 'version=%s\n' "$project_version" >> "$GITHUB_OUTPUT"
 
-      - name: Verify tag matches project version
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: bash
-        env:
-          TAG_NAME: ${{ github.ref_name }}
-          PROJECT_VERSION: ${{ steps.project.outputs.version }}
-        run: |
-          if [[ "$TAG_NAME" != "v$PROJECT_VERSION" ]]; then
-            echo "Tag version ($TAG_NAME) does not match pom.xml ($PROJECT_VERSION)." >&2
-            exit 1
-          fi
-
       - name: Build plugin
-        run: mvn --batch-mode --no-transfer-progress clean package
+        env:
+          PROJECT_VERSION: ${{ steps.project.outputs.version }}
+        run: mvn --batch-mode --no-transfer-progress -Drevision="${PROJECT_VERSION}" clean package
 
       - name: Upload JAR artifact
         if: matrix.java == '8'
         uses: actions/upload-artifact@v4
         with:
           name: ThJumpPads-java8
-          path: target/ThJumpPads-*.jar
+          path: target/ThJumpPads-${{ steps.project.outputs.version }}.jar
           if-no-files-found: error
 
   release:
