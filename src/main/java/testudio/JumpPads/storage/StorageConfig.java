@@ -15,9 +15,6 @@ final class StorageConfig {
     final boolean mysqlVerifyServerCertificate;
     final boolean mysqlAllowPublicKeyRetrieval;
     final int mysqlConnectionTimeout;
-    final String mongoUri;
-    final String mongoDatabase;
-    final String mongoCollection;
 
     private StorageConfig(FileConfiguration config) {
         type = config.getString("storage.type", "sqlite");
@@ -31,9 +28,6 @@ final class StorageConfig {
         mysqlVerifyServerCertificate = config.getBoolean("storage.mysql.verify-server-certificate", true);
         mysqlAllowPublicKeyRetrieval = config.getBoolean("storage.mysql.allow-public-key-retrieval", false);
         mysqlConnectionTimeout = config.getInt("storage.mysql.connection-timeout", 10000);
-        mongoUri = config.getString("storage.mongodb.uri");
-        mongoDatabase = config.getString("storage.mongodb.database");
-        mongoCollection = config.getString("storage.mongodb.collection");
     }
 
     static StorageConfig capture(FileConfiguration config) {

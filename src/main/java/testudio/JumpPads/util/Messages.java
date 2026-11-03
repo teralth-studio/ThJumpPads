@@ -76,38 +76,7 @@ public final class Messages {
             return (String) chatColor.getMethod("of", String.class).invoke(null, color).toString();
         } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException
                  | InvocationTargetException | LinkageError e) {
-            return nearestLegacyColor(hex);
+            return "";
         }
-    }
-
-    private static String nearestLegacyColor(String hex) {
-        int red = Integer.parseInt(hex.substring(0, 2), 16);
-        int green = Integer.parseInt(hex.substring(2, 4), 16);
-        int blue = Integer.parseInt(hex.substring(4, 6), 16);
-        int[][] palette = {
-                {0, 0, 0}, {0, 0, 170}, {0, 170, 0}, {0, 170, 170},
-                {170, 0, 0}, {170, 0, 170}, {255, 170, 0}, {170, 170, 170},
-                {85, 85, 85}, {85, 85, 255}, {85, 255, 85}, {85, 255, 255},
-                {255, 85, 85}, {255, 85, 255}, {255, 255, 85}, {255, 255, 255}
-        };
-        ChatColor[] colors = {
-                ChatColor.BLACK, ChatColor.DARK_BLUE, ChatColor.DARK_GREEN, ChatColor.DARK_AQUA,
-                ChatColor.DARK_RED, ChatColor.DARK_PURPLE, ChatColor.GOLD, ChatColor.GRAY,
-                ChatColor.DARK_GRAY, ChatColor.BLUE, ChatColor.GREEN, ChatColor.AQUA,
-                ChatColor.RED, ChatColor.LIGHT_PURPLE, ChatColor.YELLOW, ChatColor.WHITE
-        };
-        int nearest = 0;
-        int distance = Integer.MAX_VALUE;
-        for (int i = 0; i < palette.length; i++) {
-            int redDelta = red - palette[i][0];
-            int greenDelta = green - palette[i][1];
-            int blueDelta = blue - palette[i][2];
-            int candidate = redDelta * redDelta + greenDelta * greenDelta + blueDelta * blueDelta;
-            if (candidate < distance) {
-                nearest = i;
-                distance = candidate;
-            }
-        }
-        return colors[nearest].toString();
     }
 }

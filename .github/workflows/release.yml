@@ -14,7 +14,31 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java: ["8", "11", "16", "17", "21", "25"]
+        include:
+          - profile: legacy
+            java: "8"
+            artifact_file: ThJumpPads-legacy
+          - profile: legacy
+            java: "11"
+            artifact_file: ThJumpPads-legacy
+          - profile: modern
+            java: "8"
+            artifact_file: ThJumpPads
+          - profile: modern
+            java: "11"
+            artifact_file: ThJumpPads
+          - profile: modern
+            java: "16"
+            artifact_file: ThJumpPads
+          - profile: modern
+            java: "17"
+            artifact_file: ThJumpPads
+          - profile: modern
+            java: "21"
+            artifact_file: ThJumpPads
+          - profile: modern
+            java: "25"
+            artifact_file: ThJumpPads
     permissions:
       contents: read
     steps:
@@ -47,17 +71,52 @@ jobs:
           fi
           printf 'version=%s\n' "$project_version" >> "$GITHUB_OUTPUT"
 
-      - name: Build plugin
+      - name: Build ${{ matrix.profile }} JAR
         env:
           PROJECT_VERSION: ${{ steps.project.outputs.version }}
-        run: mvn --batch-mode --no-transfer-progress -Drevision="${PROJECT_VERSION}" clean package
+          PROFILE: ${{ matrix.profile }}
+        shell: bash
+        run: |
+          mvn --batch-mode --no-transfer-progress \
+            -P"${PROFILE}" \
+            -Drevision="${PROJECT_VERSION}" \
+            -Djava.target=8 \
+            -Dmaven.compiler.source=1.8 \
+            -Dmaven.compiler.target=1.8 \
+            clean package
 
-      - name: Upload JAR artifact
+      - name: Verify JAR
+        env:
+          PROJECT_VERSION: ${{ steps.project.outputs.version }}
+          ARTIFACT_FILE: ${{ matrix.artifact_file }}
+        shell: bash
+        run: |
+          jar_path="target/${ARTIFACT_FILE}-${PROJECT_VERSION}.jar"
+          python3 - "$jar_path" "$PROJECT_VERSION" <<'PY'
+          import sys
+          import zipfile
+
+          jar_path, project_version = sys.argv[1:]
+          with zipfile.ZipFile(jar_path) as jar:
+              descriptor = jar.read("plugin.yml").decode("utf-8").splitlines()
+              class_file = jar.read("testudio/JumpPads/JumpPadsPlugin.class")
+              entries = set(jar.namelist())
+
+          if f"version: '{project_version}'" not in descriptor:
+              raise SystemExit("plugin.yml version does not match the project version")
+          if int.from_bytes(class_file[6:8], "big") != 52:
+              raise SystemExit("JAR is not compatible with Java 8 bytecode")
+          if any(name.startswith(("org/sqlite/", "com/mysql/", "com/google/protobuf/")) for name in entries):
+              raise SystemExit("A JDBC library was unexpectedly packaged in the plugin JAR")
+          print(f"Verified {jar_path}: version {project_version}, Java 8 bytecode, no JDBC drivers")
+          PY
+
+      - name: Upload ${{ matrix.profile }} JAR
         if: matrix.java == '8'
         uses: actions/upload-artifact@v4
         with:
-          name: ThJumpPads-java8
-          path: target/ThJumpPads-${{ steps.project.outputs.version }}.jar
+          name: ThJumpPads-${{ matrix.profile }}-${{ steps.project.outputs.version }}
+          path: target/${{ matrix.artifact_file }}-${{ steps.project.outputs.version }}.jar
           if-no-files-found: error
 
   release:
@@ -79,10 +138,16 @@ jobs:
           fi
           printf 'version=%s\n' "${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
 
-      - name: Download JAR artifact
+      - name: Download legacy JAR
         uses: actions/download-artifact@v4
         with:
-          name: ThJumpPads-java8
+          name: ThJumpPads-legacy-${{ steps.tag.outputs.version }}
+          path: release-files
+
+      - name: Download modern JAR
+        uses: actions/download-artifact@v4
+        with:
+          name: ThJumpPads-modern-${{ steps.tag.outputs.version }}
           path: release-files
 
       - name: Create GitHub release
@@ -90,4 +155,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG_NAME: ${{ github.ref_name }}
           RELEASE_VERSION: ${{ steps.tag.outputs.version }}
-        run: gh release create "$TAG_NAME" "release-files/ThJumpPads-${RELEASE_VERSION}.jar" --verify-tag --title "ThJumpPads ${RELEASE_VERSION}" --generate-notes
+        shell: bash
+        run: |
+          legacy_jar="release-files/ThJumpPads-legacy-${RELEASE_VERSION}.jar"
+          modern_jar="release-files/ThJumpPads-${RELEASE_VERSION}.jar"
+          test -f "$legacy_jar"
+          test -f "$modern_jar"
+          gh release create "$TAG_NAME" "$legacy_jar" "$modern_jar" \
+            --verify-tag \
+            --title "ThJumpPads ${RELEASE_VERSION}" \
+            --generate-notes

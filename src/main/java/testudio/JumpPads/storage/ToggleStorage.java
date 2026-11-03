@@ -212,10 +212,7 @@ public final class ToggleStorage {
         if (type.equals("mysql")) {
             return new SqlStorageBackend(plugin, config, true, libraries.classLoaderFor(type));
         }
-        if (type.equals("mongodb")) {
-            return new MongoStorageBackend(config, libraries.classLoaderFor(type));
-        }
-        throw new StorageException("Invalid storage type: " + type + ". Use sqlite, mysql, or mongodb.");
+        throw new StorageException("Invalid storage type: " + type + ". Use sqlite or mysql.");
     }
 
     private void initializeBackendAsync(StorageConfig config, List<StoredToggle> legacyStates,

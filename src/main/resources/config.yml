@@ -23,9 +23,9 @@ jump-width: 5
 enabled-worlds: []
 
 # Database for storing player toggles. 
-# The "type" option must be one of: sqlite, mysql, or mongodb.
+# The "type" option must be one of: sqlite or mysql.
 storage:
-  type: sqlite # sqlite, mysql, or mongodb
+  type: sqlite # sqlite or mysql
   sqlite:
     file: data.db
   mysql:
@@ -38,10 +38,6 @@ storage:
     verify-server-certificate: true
     allow-public-key-retrieval: false
     connection-timeout: 10000
-  mongodb:
-    uri: "mongodb://localhost:27017"
-    database: jumppads
-    collection: player_toggles
 
 # Sound settings when a player uses a jump pad.
 sound:

@@ -2,9 +2,11 @@
 
 # Installation
 
-1. Download the jar.
-2. Place the jar in the `plugins` folder.
-3. Reload the server.
+1. Click on "Download" to open the mondrith page.
+2. Click on the "Download" from the mondrith page.
+3. Select the version of the plugin you want to download.
+4. Place the jar in the `plugins` folder.
+5. Reload the server.
 
 # Dependencies
 
@@ -61,9 +63,9 @@ jump-width: 5
 enabled-worlds: []
 
 # Database for storing player toggles.
-# The "type" option must be one of: sqlite, mysql, or mongodb.
+# The "type" option must be one of: sqlite or mysql.
 storage:
-  type: sqlite # sqlite, mysql, or mongodb
+  type: sqlite # sqlite or mysql
   sqlite:
     file: data.db
   mysql:
@@ -76,10 +78,6 @@ storage:
     verify-server-certificate: true
     allow-public-key-retrieval: false
     connection-timeout: 10000
-  mongodb:
-    uri: "mongodb://localhost:27017"
-    database: jumppads
-    collection: player_toggles
 
 # Sound settings when a player uses a jump pad.
 sound:

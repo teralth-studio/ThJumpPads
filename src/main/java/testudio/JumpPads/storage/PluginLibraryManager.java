@@ -41,26 +41,9 @@ public final class PluginLibraryManager implements AutoCloseable {
             "com/google/protobuf/protobuf-java/4.31.1/protobuf-java-4.31.1.jar",
             "protobuf-java-4.31.1.jar",
             "d60dfe7c68a0d38a248cca96924f289dc7e1966a887ee7cae397701af08575ae");
-    private static final Library MONGO_SYNC = new Library(
-            "org/mongodb/mongodb-driver-sync/5.5.1/mongodb-driver-sync-5.5.1.jar",
-            "mongodb-driver-sync-5.5.1.jar",
-            "10fbba300aca76d6996ea8a842226e78bcaaf108c908687940c991885be5e875");
-    private static final Library MONGO_CORE = new Library(
-            "org/mongodb/mongodb-driver-core/5.5.1/mongodb-driver-core-5.5.1.jar",
-            "mongodb-driver-core-5.5.1.jar",
-            "9bd21650f6c0688461a5de30000efb67ec1d5d81a1e80c5c4928bb50bbca3f16");
-    private static final Library BSON = new Library(
-            "org/mongodb/bson/5.5.1/bson-5.5.1.jar",
-            "bson-5.5.1.jar",
-            "99fd39f8b313ca5f39cb1a2e62454283a592dc4227c9010909e3652ef578a274");
-    private static final Library BSON_RECORD = new Library(
-            "org/mongodb/bson-record-codec/5.5.1/bson-record-codec-5.5.1.jar",
-            "bson-record-codec-5.5.1.jar",
-            "558fbca5b564b9335809eccbe46168abd41b04350599e43e1713cebccaa010db");
-
     private final File libraryDirectory;
     private final ClassLoader parentClassLoader;
-    private final Map<String, URLClassLoader> classLoaders = new LinkedHashMap<String, URLClassLoader>();
+    private final Map<String, ClassLoader> classLoaders = new LinkedHashMap<String, ClassLoader>();
 
     public PluginLibraryManager(JumpPadsPlugin plugin) {
         this(new File(plugin.getDataFolder(), "lib"), plugin.getClass().getClassLoader());
@@ -72,9 +55,18 @@ public final class PluginLibraryManager implements AutoCloseable {
     }
 
     public synchronized ClassLoader classLoaderFor(String backend) {
-        URLClassLoader existing = classLoaders.get(backend);
+        ClassLoader existing = classLoaders.get(backend);
         if (existing != null) {
             return existing;
+        }
+
+        String driverClass = driverClassFor(backend);
+        try {
+            Class.forName(driverClass, true, parentClassLoader);
+            classLoaders.put(backend, parentClassLoader);
+            return parentClassLoader;
+        } catch (ClassNotFoundException | LinkageError e) {
+            // Fall back to the verified plugin libraries when the server does not provide a usable driver.
         }
 
         List<Library> libraries = librariesFor(backend);
@@ -90,14 +82,16 @@ public final class PluginLibraryManager implements AutoCloseable {
     @Override
     public synchronized void close() {
         IOException failure = null;
-        for (URLClassLoader loader : classLoaders.values()) {
-            try {
-                loader.close();
-            } catch (IOException e) {
-                if (failure == null) {
-                    failure = e;
-                } else {
-                    failure.addSuppressed(e);
+        for (ClassLoader classLoader : classLoaders.values()) {
+            if (classLoader instanceof URLClassLoader) {
+                try {
+                    ((URLClassLoader) classLoader).close();
+                } catch (IOException e) {
+                    if (failure == null) {
+                        failure = e;
+                    } else {
+                        failure.addSuppressed(e);
+                    }
                 }
             }
         }
@@ -199,8 +193,15 @@ public final class PluginLibraryManager implements AutoCloseable {
         if ("mysql".equals(backend)) {
             return Arrays.asList(MYSQL, PROTOBUF);
         }
-        if ("mongodb".equals(backend)) {
-            return Arrays.asList(MONGO_SYNC, MONGO_CORE, BSON, BSON_RECORD);
+        throw new StorageException("Unsupported storage backend: " + backend);
+    }
+
+    private static String driverClassFor(String backend) {
+        if ("sqlite".equals(backend)) {
+            return "org.sqlite.JDBC";
+        }
+        if ("mysql".equals(backend)) {
+            return "com.mysql.cj.jdbc.Driver";
         }
         throw new StorageException("Unsupported storage backend: " + backend);
     }
@@ -248,9 +249,7 @@ public final class PluginLibraryManager implements AutoCloseable {
         private static boolean isLibraryClass(String name) {
             return name.startsWith("org.sqlite.")
                     || name.startsWith("com.mysql.")
-                    || name.startsWith("com.google.protobuf.")
-                    || name.startsWith("com.mongodb.")
-                    || name.startsWith("org.bson.");
+                    || name.startsWith("com.google.protobuf.");
         }
     }
 }
