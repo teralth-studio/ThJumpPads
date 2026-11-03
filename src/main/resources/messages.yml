@@ -1,0 +1,21 @@
+# ==========================================
+# ThJumpPads - Messages File
+# ==========================================
+
+# You can set any key value to "" to disable sending that message.
+# You can also use PlaceholderAPI placeholders here.
+
+prefix: "&e&lJumpPads &8» &r"
+
+enabled: "&aYou have enabled the JumpPads usage."
+disabled: "&cYou have disabled the JumpPads usage."
+already-enabled: "&eYou already have the JumpPads enabled."
+already-disabled: "&eYou already have the JumpPads disabled."
+status: "&7Current status: &f%jumppads_status%"
+
+reloaded: "&aConfiguration reloaded in %time% ms."
+storage-error: "&cCould not connect to storage. Check the console."
+no-permission: "&cYou do not have permission to do this."
+players-only: "&cThis command can only be used in the game."
+unknown-command: "&cUsage: &f/%command% <toggle|enable|disable|reload>"
+world-disabled: "&cJumpPads is not enabled in this world."

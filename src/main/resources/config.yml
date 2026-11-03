@@ -1,0 +1,51 @@
+# ==========================================
+# ThJumpPads - Configuration File
+# ==========================================
+
+# The block that players must stand on to activate the jump pad. 
+jump-block: "IRON_PLATE"
+
+# If true, there must be a block below the jump pad block for it to work. 
+requires-block-below: false
+
+# The block that must be below the jump pad block for it to work. Only used if 
+# requires-block-below is set to true.
+block-below: "IRON_BLOCK"
+
+# The vertical distance the player will be launched, in blocks.
+jump-height: 5
+
+# The horizontal distance the player will be launched, in blocks.
+jump-width: 5
+
+# Worlds where the jump pads are enabled. 
+# (Leave empty to enable in all worlds)
+enabled-worlds: []
+
+# Database for storing player toggles. 
+# Options on "type" must be on of the following options: sqlite, mysql, mongodb
+storage:
+  type: sqlite # sqlite, mysql o mongodb
+  sqlite:
+    file: data.db
+  mysql:
+    host: localhost
+    port: 3306
+    database: televeling
+    username: root
+    password: ""
+    use-ssl: false
+    verify-server-certificate: true
+    allow-public-key-retrieval: false
+    connection-timeout: 10000
+  mongodb:
+    uri: "mongodb://localhost:27017"
+    database: jumppads
+    collection: player_toggles
+
+# Sound settings when a player uses a jump pad.
+sound:
+  enabled: true
+  name: "LEVEL_UP"
+  volume: 1.0
+  pitch: 1.2

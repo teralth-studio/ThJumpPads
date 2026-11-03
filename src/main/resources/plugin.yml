@@ -1,0 +1,19 @@
+name: ThJumpPads
+version: '${project.version}'
+main: testudio.JumpPads.JumpPadsPlugin
+author: TeStudio
+description: Create custom jump pads to launch players across your server.
+softdepend: [PlaceholderAPI]
+libraries:
+  - org.xerial:sqlite-jdbc:3.50.3.0
+  - com.mysql:mysql-connector-j:9.4.0
+  - org.mongodb:mongodb-driver-sync:5.5.1
+commands:
+  thjumppads:
+    description: Main command for ThJumpPads
+    aliases: [jp, jumppad, jumppads]
+    usage: /thjumppads <toggle|enable|disable|reload>
+permissions:
+  thjumppads.reload:
+    default: op
+    description: Reloads the plugin

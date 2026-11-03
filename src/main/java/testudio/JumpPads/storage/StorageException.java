@@ -1,0 +1,21 @@
+package testudio.JumpPads.storage;
+
+public final class StorageException extends RuntimeException {
+
+    private static final long serialVersionUID = 1L;
+
+    public StorageException(String message) {
+        super(message);
+    }
+
+    public StorageException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+    public String detailedMessage() {
+        Throwable cause = getCause();
+        return cause == null || cause.getMessage() == null
+                ? getMessage()
+                : getMessage() + " Detalle: " + cause.getMessage();
+    }
+}
