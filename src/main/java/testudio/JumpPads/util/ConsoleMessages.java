@@ -25,7 +25,7 @@ public final class ConsoleMessages {
     }
 
     public static void warning(JavaPlugin plugin, String message) {
-        send(plugin.getServer().getConsoleSender(), PREFIX + "&6" + message);
+        send(plugin.getServer().getConsoleSender(), PREFIX + "&e" + message);
     }
 
     public static void error(JavaPlugin plugin, String message) {

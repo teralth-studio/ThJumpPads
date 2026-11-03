@@ -49,6 +49,9 @@ public final class JumpPadListener implements Listener {
     }
 
     private void tryJump(Player player, Location location) {
+        if (!plugin.toggles().isReady()) {
+            return;
+        }
         Settings settings = plugin.settings();
 
         if (!settings.isWorldEnabled(player.getWorld())) {
@@ -75,9 +78,9 @@ public final class JumpPadListener implements Listener {
     }
 
     /**
-     * Busca el bloque del pad en la posicion de los pies, y tambien un bloque
-     * mas abajo (placas/alfombras tienen hitbox baja y el jugador puede quedar
-     * registrado en el bloque superior).
+     * Checks the pad block at the player's feet and one block below. Pressure
+     * plates and carpets have low hitboxes, so the player may be registered in
+     * the block above the pad.
      */
     private Block padAt(Location location) {
         Settings settings = plugin.settings();

@@ -77,7 +77,7 @@ public final class Settings {
         Sound resolved = resolveSound(soundName);
         if (resolved == null) {
             ConsoleMessages.warning(plugin, "Sound unavailable in this Minecraft version (sound.name): "
-                    + soundName);
+                    + "&b" + soundName);
         }
         sound = resolved != null ? resolved : legacySound();
     }
@@ -86,7 +86,7 @@ public final class Settings {
         Material found = resolveMaterial(raw);
         if (found == null) {
             ConsoleMessages.warning(plugin, "Invalid or unavailable material for this Minecraft version "
-                    + "in config.yml (" + path + "): " + raw + ". Using " + fallback + ".");
+                    + "in config.yml (&b" + path + "&e): &b" + raw + "&e. Using &b" + fallback + "&e.");
             return fallback;
         }
         return found;

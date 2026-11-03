@@ -16,6 +16,6 @@ public final class StorageException extends RuntimeException {
         Throwable cause = getCause();
         return cause == null || cause.getMessage() == null
                 ? getMessage()
-                : getMessage() + " Detalle: " + cause.getMessage();
+                : getMessage() + " Details: " + cause.getMessage();
     }
 }

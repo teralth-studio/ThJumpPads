@@ -14,6 +14,7 @@ already-disabled: "&eYou already have the JumpPads disabled."
 status: "&7Current status: &f%jumppads_status%"
 
 reloaded: "&aConfiguration reloaded in %time% ms."
+storage-loading: "&eStorage is still connecting. Please try again shortly."
 storage-error: "&cCould not connect to storage. Check the console."
 no-permission: "&cYou do not have permission to do this."
 players-only: "&cThis command can only be used in the game."

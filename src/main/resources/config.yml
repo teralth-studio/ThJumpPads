@@ -23,9 +23,9 @@ jump-width: 5
 enabled-worlds: []
 
 # Database for storing player toggles. 
-# Options on "type" must be on of the following options: sqlite, mysql, mongodb
+# The "type" option must be one of: sqlite, mysql, or mongodb.
 storage:
-  type: sqlite # sqlite, mysql o mongodb
+  type: sqlite # sqlite, mysql, or mongodb
   sqlite:
     file: data.db
   mysql:
@@ -34,7 +34,9 @@ storage:
     database: televeling
     username: root
     password: ""
-    use-ssl: false
+    # Set to false only if the MySQL server does not support TLS.
+    use-ssl: true
+    # Applies when use-ssl is true: verifies both the certificate and hostname.
     verify-server-certificate: true
     allow-public-key-retrieval: false
     connection-timeout: 10000

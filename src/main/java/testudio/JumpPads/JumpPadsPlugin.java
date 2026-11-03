@@ -35,9 +35,9 @@ public final class JumpPadsPlugin extends JavaPlugin {
         this.toggleStorage = new ToggleStorage(this);
 
         try {
-            reloadAll();
-        } catch (StorageException e) {
-            ConsoleMessages.error(this, "Storage initialization failed: " + e.detailedMessage());
+            reloadConfiguration();
+        } catch (RuntimeException e) {
+            ConsoleMessages.error(this, "Configuration initialization failed: &b" + e.getMessage());
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
@@ -54,10 +54,18 @@ public final class JumpPadsPlugin extends JavaPlugin {
         if (Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI")) {
             this.expansion = new JumpPadsExpansion(this);
             this.expansion.register();
-            ConsoleMessages.info(this, "Expantions detected: PlaceholderAPI");
+            ConsoleMessages.info(this, "Expansions detected: &bPlaceholderAPI");
         }
 
-        ConsoleMessages.initialized(this);
+        ConsoleMessages.info(this, "Storage connection started in the background.");
+        toggleStorage.loadAsync(failure -> {
+            if (failure != null) {
+                ConsoleMessages.error(this, "Storage initialization failed: &b" + failure.detailedMessage());
+                getServer().getPluginManager().disablePlugin(this);
+                return;
+            }
+            ConsoleMessages.initialized(this);
+        });
     }
 
     @Override
@@ -72,12 +80,16 @@ public final class JumpPadsPlugin extends JavaPlugin {
     }
 
     public void reloadAll() {
+        reloadConfiguration();
+        toggleStorage.load();
+    }
+
+    private void reloadConfiguration() {
         YamlDefaultsUpdater.appendMissingKeys(
                 this, new File(getDataFolder(), "config.yml"), "config.yml");
         reloadConfig();
         settings.load();
         messages.load();
-        toggleStorage.load();
     }
 
     public Settings settings() {
@@ -96,7 +108,7 @@ public final class JumpPadsPlugin extends JavaPlugin {
         try {
             new Metrics(this, 35094);
         } catch (RuntimeException | LinkageError e) {
-            ConsoleMessages.warning(this, "Could not initialize bStats: " + e.getMessage());
+            ConsoleMessages.warning(this, "Could not initialize bStats: &b" + e.getMessage());
         }
     }
 }

@@ -8,35 +8,46 @@ on:
       - "v*"
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        java: ["8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "25"]
+    permissions:
+      contents: read
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Set up Java 8
+      - name: Set up Java ${{ matrix.java }}
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "8"
+          java-version: ${{ matrix.java }}
           cache: maven
 
       - name: Read project version
         id: project
-        run: echo "version=$(mvn -q -DforceStdout help:evaluate -Dexpression=project.version)" >> "$GITHUB_OUTPUT"
+        shell: bash
+        run: |
+          project_version="$(mvn -q -DforceStdout help:evaluate -Dexpression=project.version)"
+          if [[ ! "$project_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid project version: $project_version" >&2
+            exit 1
+          fi
+          printf 'version=%s\n' "$project_version" >> "$GITHUB_OUTPUT"
 
       - name: Verify tag matches project version
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+          PROJECT_VERSION: ${{ steps.project.outputs.version }}
         run: |
-          tag_version="${GITHUB_REF_NAME#v}"
-          project_version="${{ steps.project.outputs.version }}"
-          if [[ "$tag_version" != "$project_version" ]]; then
-            echo "Tag version ($tag_version) does not match pom.xml ($project_version)." >&2
+          if [[ "$TAG_NAME" != "v$PROJECT_VERSION" ]]; then
+            echo "Tag version ($TAG_NAME) does not match pom.xml ($PROJECT_VERSION)." >&2
             exit 1
           fi
 
@@ -44,14 +55,41 @@ jobs:
         run: mvn --batch-mode --no-transfer-progress clean package
 
       - name: Upload JAR artifact
+        if: matrix.java == '8'
         uses: actions/upload-artifact@v4
         with:
-          name: ThJumpPads-${{ steps.project.outputs.version }}
-          path: target/ThJumpPads-${{ steps.project.outputs.version }}.jar
+          name: ThJumpPads-java8
+          path: target/ThJumpPads-*.jar
           if-no-files-found: error
 
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Validate release tag
+        id: tag
+        shell: bash
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          if [[ ! "$TAG_NAME" =~ ^v([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?)$ ]]; then
+            echo "Invalid release tag: $TAG_NAME" >&2
+            exit 1
+          fi
+          printf 'version=%s\n' "${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+
+      - name: Download JAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ThJumpPads-java8
+          path: release-files
+
       - name: Create GitHub release
-        if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" "target/ThJumpPads-${{ steps.project.outputs.version }}.jar" --verify-tag --title "ThJumpPads ${{ steps.project.outputs.version }}" --generate-notes
+          TAG_NAME: ${{ github.ref_name }}
+          RELEASE_VERSION: ${{ steps.tag.outputs.version }}
+        run: gh release create "$TAG_NAME" "release-files/ThJumpPads-${RELEASE_VERSION}.jar" --verify-tag --title "ThJumpPads ${RELEASE_VERSION}" --generate-notes

@@ -39,18 +39,27 @@ public final class JumpPadsCommand implements CommandExecutor, TabCompleter {
                 plugin.messages().send(sender, "no-permission");
                 return true;
             }
+            if (!plugin.toggles().isReady()) {
+                plugin.messages().send(sender, "storage-loading");
+                return true;
+            }
             PlaceholderSupport.reset();
             long reloadStartedAt = System.nanoTime();
             try {
                 plugin.reloadAll();
             } catch (StorageException e) {
-                ConsoleMessages.error(plugin, "Storage reload failed: " + e.detailedMessage());
+                ConsoleMessages.error(plugin, "Storage reload failed: &b" + e.detailedMessage());
                 plugin.messages().send(sender, "storage-error");
                 return true;
             }
             String reloadTime = Long.toString((System.nanoTime() - reloadStartedAt) / 1_000_000L);
             plugin.messages().send(sender, "reloaded",
                     Collections.singletonMap("time", reloadTime));
+            return true;
+        }
+
+        if (!plugin.toggles().isReady()) {
+            plugin.messages().send(sender, "storage-loading");
             return true;
         }
 

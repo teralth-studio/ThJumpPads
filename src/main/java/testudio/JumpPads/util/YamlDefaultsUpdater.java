@@ -33,7 +33,7 @@ public final class YamlDefaultsUpdater {
         try {
             content = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
         } catch (IOException e) {
-            throw new IllegalStateException("No se pudo leer " + file.getName() + ".", e);
+            throw new IllegalStateException("Could not read " + file.getName() + ".", e);
         }
 
         String[] sourceLines = content.split("\\r?\\n", -1);
@@ -66,22 +66,20 @@ public final class YamlDefaultsUpdater {
         try {
             Files.write(file.toPath(), join(updated, lineEnding).getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {
-            throw new IllegalStateException("No se pudieron agregar las claves faltantes a "
-                    + file.getName() + ".", e);
+            throw new IllegalStateException("Could not append missing keys to " + file.getName() + ".", e);
         }
     }
 
     private static YamlConfiguration loadDefaults(JavaPlugin plugin, String resourceName) {
         InputStream resource = plugin.getResource(resourceName);
         if (resource == null) {
-            throw new IllegalStateException("No se encontro el recurso predeterminado " + resourceName + ".");
+            throw new IllegalStateException("Default resource " + resourceName + " was not found.");
         }
         try (InputStream input = resource;
              InputStreamReader reader = new InputStreamReader(input, StandardCharsets.UTF_8)) {
             return YamlConfiguration.loadConfiguration(reader);
         } catch (IOException e) {
-            throw new IllegalStateException("No se pudieron leer los valores predeterminados de "
-                    + resourceName + ".", e);
+            throw new IllegalStateException("Could not read defaults from " + resourceName + ".", e);
         }
     }
 
@@ -151,7 +149,7 @@ public final class YamlDefaultsUpdater {
         for (String part : parts) {
             parentIndex = findChild(lines, parentIndex, parentIndent, part);
             if (parentIndex < 0) {
-                throw new IllegalStateException("No se encontro la seccion YAML existente: " + path);
+                throw new IllegalStateException("Existing YAML section was not found: " + path);
             }
             parentIndent = indentation(lines[parentIndex]);
         }

@@ -6,15 +6,12 @@
 2. Place the jar in the `plugins` folder.
 3. Reload the server.
 
-All jump pad and player toggle features are available to everyone. The only permission is
-`thjumppads.reload`, required for `/jumppads reload` (operators by default).
-
 # Dependencies
 
-#### Soft dependencies:
+#### Soft Dependencies:
 - [PlaceholderAPI](https://www.spigotmc.org/resources/placeholderapi.6245/): Used for placeholders in messages and commands. Also to register placeholders for the plugin.
 
-# Commands and permissions
+# Commands and Permissions
 | Command | Description | Permission |
 |---|---|---|
 | `/thjumppads toggle` | Enable or disable the jump pads use | `-` |
@@ -25,7 +22,15 @@ All jump pad and player toggle features are available to everyone. The only perm
 
 *Enabled for OPs by default
 
-# Plugin files
+# Placeholders
+
+To use this feature you must have [PlaceholderAPI](https://www.spigotmc.org/resources/placeholderapi.6245/) installed.
+
+| Placeholder | Description |
+|---|---|
+| `%jumppads_status%` | Returns "enabled" or "disabled" based on the player's JumpPads status |
+
+# Plugin Files
 
 <details>
 <summary>config.yml</summary>
@@ -56,9 +61,9 @@ jump-width: 5
 enabled-worlds: []
 
 # Database for storing player toggles.
-# Options on "type" must be on of the following options: sqlite, mysql, mongodb
+# The "type" option must be one of: sqlite, mysql, or mongodb.
 storage:
-  type: sqlite # sqlite, mysql o mongodb
+  type: sqlite # sqlite, mysql, or mongodb
   sqlite:
     file: data.db
   mysql:
@@ -67,7 +72,7 @@ storage:
     database: televeling
     username: root
     password: ""
-    use-ssl: false
+    use-ssl: true
     verify-server-certificate: true
     allow-public-key-retrieval: false
     connection-timeout: 10000
@@ -85,6 +90,7 @@ sound:
 ```
 
 </details>
+
 
 <details>
 <summary>messages.yml</summary>
@@ -117,8 +123,9 @@ world-disabled: "&cJumpPads is not enabled in this world."
 </details>
 
 
-
 # Plugin Metrics
 
 [![bStats](images/bstats-charts.svg)](https://bstats.org/plugin/bukkit/ThJumpPads/35094)
 
+# Support
+For support join our [Discord server](https://discord.gg/n6uDZTJ7QR) or open an issue on GitHub.

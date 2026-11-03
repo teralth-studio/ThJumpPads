@@ -36,7 +36,7 @@ public final class Messages {
     }
 
     public String raw(String key) {
-        return config.getString(key, "&cMensaje faltante: " + key);
+        return config.getString(key, "&cMissing message: " + key);
     }
 
     public void send(CommandSender sender, String key) {
@@ -61,7 +61,7 @@ public final class Messages {
 
     public static String colorize(String input) {
         Matcher matcher = HEX.matcher(input);
-        StringBuilder builder = new StringBuilder();
+        StringBuffer builder = new StringBuffer();
         while (matcher.find()) {
             matcher.appendReplacement(builder, Matcher.quoteReplacement(hexColor(matcher.group(1))));
         }
