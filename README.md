@@ -2,11 +2,12 @@
 
 # Installation
 
-1. Click on "Download" to open the mondrith page.
-2. Click on the "Download" from the mondrith page.
-3. Select the version of the plugin you want to download.
-4. Place the jar in the `plugins` folder.
-5. Reload the server.
+1. Click on "Download", an Github releases will appear.
+2. Select the jar, depending on your server version.:
+   If your server version is between **1.8 - 1.12.2** download the jar: **ThJumpPads-legacy-(version).jar**
+   If your server version is between **1.13 - 26.3** download the jar: ThJumpPads-(version).jar
+3. Place the jar in the `plugins` folder.
+4. Reload the server.
 
 # Dependencies
 
