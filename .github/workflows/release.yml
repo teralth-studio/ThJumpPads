@@ -46,34 +46,6 @@ jobs:
           fi
           printf 'version=%s\n' "$project_version" >> "$GITHUB_OUTPUT"
 
-      - name: Build legacy JAR
-        env:
-          PROJECT_VERSION: ${{ steps.project.outputs.version }}
-        shell: bash
-        run: |
-          for attempt in 1 2 3; do
-            echo "Legacy build attempt ${attempt}/3"
-            if mvn --batch-mode --no-transfer-progress -U \
-              -Dmaven.wagon.http.retryHandler.count=3 \
-              -Plegacy \
-              -Drevision="${PROJECT_VERSION}" \
-              -Djava.target=8 \
-              -Dmaven.compiler.source=1.8 \
-              -Dmaven.compiler.target=1.8 \
-              clean package; then
-              break
-            fi
-            if [[ "$attempt" -eq 3 ]]; then
-              echo "Legacy build failed after three attempts." >&2
-              exit 1
-            fi
-            sleep "$((attempt * 15))"
-          done
-          legacy_jar="target/ThJumpPads-legacy-${PROJECT_VERSION}.jar"
-          test -f "$legacy_jar"
-          mkdir -p release-files
-          cp "$legacy_jar" release-files/
-
       - name: Build modern JAR
         env:
           PROJECT_VERSION: ${{ steps.project.outputs.version }}
@@ -99,7 +71,35 @@ jobs:
           done
           modern_jar="target/ThJumpPads-${PROJECT_VERSION}.jar"
           test -f "$modern_jar"
+          mkdir -p release-files
           cp "$modern_jar" release-files/
+
+      - name: Build legacy JAR
+        env:
+          PROJECT_VERSION: ${{ steps.project.outputs.version }}
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            echo "Legacy build attempt ${attempt}/3"
+            if mvn --batch-mode --no-transfer-progress -U \
+              -Dmaven.wagon.http.retryHandler.count=3 \
+              -Plegacy \
+              -Drevision="${PROJECT_VERSION}" \
+              -Djava.target=8 \
+              -Dmaven.compiler.source=1.8 \
+              -Dmaven.compiler.target=1.8 \
+              clean package; then
+              break
+            fi
+            if [[ "$attempt" -eq 3 ]]; then
+              echo "Legacy build failed after three attempts." >&2
+              exit 1
+            fi
+            sleep "$((attempt * 15))"
+          done
+          legacy_jar="target/ThJumpPads-legacy-${PROJECT_VERSION}.jar"
+          test -f "$legacy_jar"
+          cp "$legacy_jar" release-files/
 
       - name: Verify both JARs
         env:
@@ -194,5 +194,6 @@ jobs:
           gh release create "$legacy_tag" "$legacy_jar" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$TARGET_SHA" \
+            --latest \
             --title "ThJumpPads ${RELEASE_VERSION}-legacy" \
             --notes "$legacy_notes"
