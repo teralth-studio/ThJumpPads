@@ -162,6 +162,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
           RELEASE_TAG: ${{ needs.resolve-release.outputs.release_tag }}
         run: |
           cat > release-notes.md <<EOF
@@ -173,30 +174,53 @@ jobs:
           2. Place it in your server's \`plugins\` folder.
           3. Restart your server.
           EOF
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release edit "$RELEASE_TAG" --title "$RELEASE_TAG" --notes-file release-notes.md
-            OLD_JAR_ASSET_IDS="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" \
-              --jq '.assets[] | select(.name | ascii_downcase | endswith(".jar")) | .id')"
-            for ASSET_ID in $OLD_JAR_ASSET_IDS; do
-              gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/assets/${ASSET_ID}"
-            done
-            gh release upload "$RELEASE_TAG" "release/ThJumpPads-${RELEASE_TAG}.jar" --clobber
+
+          if ! RELEASE_ID="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" --jq .id 2>release-lookup-error.txt)"; then
+            if grep -q 'HTTP 404' release-lookup-error.txt; then
+              RELEASE_ID="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/releases" \
+                -f "tag_name=${RELEASE_TAG}" \
+                -f "target_commitish=${GITHUB_SHA}" \
+                -f "name=${RELEASE_TAG}" \
+                -f "body=$(cat release-notes.md)" \
+                -F draft=true \
+                --jq .id)"
+            else
+              cat release-lookup-error.txt
+              exit 1
+            fi
           else
-            gh release create "$RELEASE_TAG" "release/ThJumpPads-${RELEASE_TAG}.jar" \
-              --verify-tag \
-              --title "$RELEASE_TAG" \
-              --notes-file release-notes.md
+            OLD_JAR_ASSET_IDS="$(gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+              --jq '.assets[] | select(.name | ascii_downcase | endswith(".jar")) | .id')"
           fi
-          RELEASE_ID="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" --jq .id)"
-          DRAFT_STATUS="$(gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+
+          for ASSET_ID in $OLD_JAR_ASSET_IDS; do
+            gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/assets/${ASSET_ID}"
+          done
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            --header "Content-Type: application/java-archive" \
+            --data-binary "@release/ThJumpPads-${RELEASE_TAG}.jar" \
+            "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets?name=ThJumpPads-${RELEASE_TAG}.jar"
+
+          RELEASE_JSON="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+            -f "name=${RELEASE_TAG}" \
+            -f "body=$(cat release-notes.md)" \
             -F draft=false \
-            --jq .draft)"
+            --jq '{tag_name, draft, assets: [.assets[] | select(.name | ascii_downcase | endswith(".jar")) | .name]}')"
+          ACTUAL_TAG="$(printf '%s' "$RELEASE_JSON" | jq -r .tag_name)"
+          DRAFT_STATUS="$(printf '%s' "$RELEASE_JSON" | jq -r .draft)"
+          JAR_ASSETS="$(printf '%s' "$RELEASE_JSON" | jq -r '.assets | sort | join(",")')"
+          if [ "$ACTUAL_TAG" != "$RELEASE_TAG" ]; then
+            echo "ERROR: GitHub returned tag '$ACTUAL_TAG' instead of '$RELEASE_TAG'."
+            exit 1
+          fi
           if [ "$DRAFT_STATUS" != "false" ]; then
             echo "ERROR: GitHub release '$RELEASE_TAG' was not published publicly."
             exit 1
           fi
-          JAR_ASSETS="$(gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
-            --jq '[.assets[] | select(.name | ascii_downcase | endswith(".jar")) | .name] | join(",")')"
           if [ "$JAR_ASSETS" != "ThJumpPads-${RELEASE_TAG}.jar" ]; then
             echo "ERROR: Expected exactly one plugin JAR, 'ThJumpPads-${RELEASE_TAG}.jar'; found: '${JAR_ASSETS}'."
             exit 1
