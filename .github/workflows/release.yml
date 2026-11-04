@@ -1,199 +1,185 @@
-name: Release
+name: Build and release
 
 on:
   push:
     branches:
       - main
     tags:
-      - "[0-9]*"
-      - "v*"
-      - "!*-legacy"
-  workflow_dispatch:
+      - "v*.*.*"
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  resolve-release:
+    name: Resolve release tag
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      run_release: ${{ steps.resolve.outputs.run_release }}
+      release_tag: ${{ steps.resolve.outputs.release_tag }}
+      retag: ${{ steps.resolve.outputs.retag }}
     steps:
-      - name: Checkout source
+      - name: Check out source and tags
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Resolve release tag
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_REF_TYPE: ${{ github.ref_type }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            RELEASE_TAG="$GITHUB_REF_NAME"
+            if ! printf '%s\n' "$RELEASE_TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+              echo "ERROR: Tag '$RELEASE_TAG' is not a semantic version tag."
+              exit 1
+            fi
+            echo "run_release=true" >> "$GITHUB_OUTPUT"
+            echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+            echo "retag=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
-      - name: Set up Java 17
+          git fetch --force --tags origin
+          CURRENT_TAG="$(git tag --points-at "$GITHUB_SHA" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)"
+          if [ -n "$CURRENT_TAG" ]; then
+            echo "A release tag already points to this commit; the tag event will publish it."
+            echo "run_release=false" >> "$GITHUB_OUTPUT"
+            echo "release_tag=$CURRENT_TAG" >> "$GITHUB_OUTPUT"
+            echo "retag=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          RELEASE_TAG="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)"
+          if ! printf '%s\n' "$RELEASE_TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "ERROR: Latest published release tag '$RELEASE_TAG' is not a semantic version tag."
+            exit 1
+          fi
+          echo "No new tag was pushed; the latest published release tag '$RELEASE_TAG' will be recreated at this commit."
+          echo "run_release=true" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "retag=true" >> "$GITHUB_OUTPUT"
+
+  validate:
+    name: Validate on Java ${{ matrix.java }}
+    needs: resolve-release
+    if: needs.resolve-release.outputs.run_release == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        java: ["8", "11", "16", "17", "21", "25"]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: ${{ matrix.java }}
           cache: maven
+      - name: Verify project
+        run: mvn --batch-mode clean verify
 
-      - name: Determine build version
-        id: project
-        shell: bash
-        run: |
-          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            tag_name="$GITHUB_REF_NAME"
-            if [[ "$tag_name" == *-legacy || ! "$tag_name" =~ ^v?([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?)$ ]]; then
-              echo "Invalid release tag: $GITHUB_REF_NAME" >&2
-              exit 1
-            fi
-            project_version="${BASH_REMATCH[1]}"
-          else
-            project_version="$(mvn -q -DforceStdout help:evaluate -Dexpression=project.version)"
-          fi
-          if [[ ! "$project_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
-            echo "Invalid project version: $project_version" >&2
-            exit 1
-          fi
-          printf 'version=%s\n' "$project_version" >> "$GITHUB_OUTPUT"
-
-      - name: Build modern JAR
+  package:
+    name: Package Java 8 plugin
+    needs: [resolve-release, validate]
+    if: needs.resolve-release.outputs.run_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Java 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "8"
+          cache: maven
+      - name: Build release jar
         env:
-          PROJECT_VERSION: ${{ steps.project.outputs.version }}
-        shell: bash
-        run: |
-          for attempt in 1 2 3; do
-            echo "Modern build attempt ${attempt}/3"
-            if mvn --batch-mode --no-transfer-progress -U \
-              -Dmaven.wagon.http.retryHandler.count=3 \
-              -Pmodern \
-              -Drevision="${PROJECT_VERSION}" \
-              -Djava.target=8 \
-              -Dmaven.compiler.source=1.8 \
-              -Dmaven.compiler.target=1.8 \
-              clean package; then
-              break
-            fi
-            if [[ "$attempt" -eq 3 ]]; then
-              echo "Modern build failed after three attempts." >&2
-              exit 1
-            fi
-            sleep "$((attempt * 15))"
-          done
-          modern_jar="target/ThJumpPads-${PROJECT_VERSION}.jar"
-          test -f "$modern_jar"
-          mkdir -p release-files
-          cp "$modern_jar" release-files/
-
-      - name: Build legacy JAR
-        env:
-          PROJECT_VERSION: ${{ steps.project.outputs.version }}
-        shell: bash
-        run: |
-          for attempt in 1 2 3; do
-            echo "Legacy build attempt ${attempt}/3"
-            if mvn --batch-mode --no-transfer-progress -U \
-              -Dmaven.wagon.http.retryHandler.count=3 \
-              -Plegacy \
-              -Drevision="${PROJECT_VERSION}" \
-              -Djava.target=8 \
-              -Dmaven.compiler.source=1.8 \
-              -Dmaven.compiler.target=1.8 \
-              clean package; then
-              break
-            fi
-            if [[ "$attempt" -eq 3 ]]; then
-              echo "Legacy build failed after three attempts." >&2
-              exit 1
-            fi
-            sleep "$((attempt * 15))"
-          done
-          legacy_jar="target/ThJumpPads-legacy-${PROJECT_VERSION}.jar"
-          test -f "$legacy_jar"
-          cp "$legacy_jar" release-files/
-
-      - name: Verify both JARs
-        env:
-          PROJECT_VERSION: ${{ steps.project.outputs.version }}
-        shell: bash
-        run: |
-          python3 - "$PROJECT_VERSION" <<'PY'
-          import sys
-          import zipfile
-
-          project_version = sys.argv[1]
-          artifacts = (
-              f"release-files/ThJumpPads-legacy-{project_version}.jar",
-              f"release-files/ThJumpPads-{project_version}.jar",
-          )
-          for jar_path in artifacts:
-              with zipfile.ZipFile(jar_path) as jar:
-                  descriptor = jar.read("plugin.yml").decode("utf-8").splitlines()
-                  class_file = jar.read("testudio/JumpPads/JumpPadsPlugin.class")
-                  entries = set(jar.namelist())
-
-              if f"version: '{project_version}'" not in descriptor:
-                  raise SystemExit(f"{jar_path}: plugin.yml version does not match the project version")
-              if int.from_bytes(class_file[6:8], "big") != 52:
-                  raise SystemExit(f"{jar_path}: expected Java 8 bytecode")
-              if any(name.startswith(("org/sqlite/", "com/mysql/", "com/google/protobuf/")) for name in entries):
-                  raise SystemExit(f"{jar_path}: a JDBC library was unexpectedly packaged")
-              print(f"Verified {jar_path}")
-          PY
-
-      - name: Upload both JARs
+          RELEASE_TAG: ${{ needs.resolve-release.outputs.release_tag }}
+        run: mvn --batch-mode "-Drevision=${RELEASE_TAG}" clean package
+      - name: Upload release jar
         uses: actions/upload-artifact@v4
         with:
-          name: ThJumpPads-release-${{ steps.project.outputs.version }}
-          path: release-files/*.jar
+          name: thenderbutt-release-jar
+          path: target/ThEnderButt-${{ needs.resolve-release.outputs.release_tag }}.jar
           if-no-files-found: error
 
   release:
-    if: startsWith(github.ref, 'refs/tags/') && !endsWith(github.ref, '-legacy')
-    needs: build
+    name: Publish GitHub release
+    needs: [resolve-release, package]
+    if: needs.resolve-release.outputs.run_release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Validate release tag
-        id: tag
-        shell: bash
-        env:
-          TAG_NAME: ${{ github.ref_name }}
-        run: |
-          if [[ "$TAG_NAME" == *-legacy || ! "$TAG_NAME" =~ ^v?([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?)$ ]]; then
-            echo "Invalid release tag: $TAG_NAME" >&2
-            exit 1
-          fi
-          printf 'version=%s\n' "${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
-
-      - name: Download both JARs
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Download release jar
         uses: actions/download-artifact@v4
         with:
-          name: ThJumpPads-release-${{ steps.tag.outputs.version }}
-          path: release-files
-
-      - name: Create GitHub release
+          name: thenderbutt-release-jar
+          path: release
+      - name: Recreate latest tag when needed
+        if: needs.resolve-release.outputs.retag == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG_NAME: ${{ github.ref_name }}
-          RELEASE_VERSION: ${{ steps.tag.outputs.version }}
-          TARGET_SHA: ${{ github.sha }}
-        shell: bash
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+          RELEASE_TAG: ${{ needs.resolve-release.outputs.release_tag }}
         run: |
-          modern_jar="release-files/ThJumpPads-${RELEASE_VERSION}.jar"
-          legacy_jar="release-files/ThJumpPads-legacy-${RELEASE_VERSION}.jar"
-          test -f "$modern_jar"
-          test -f "$legacy_jar"
+          TAG_OBJECT_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags" \
+            -f "tag=${RELEASE_TAG}" \
+            -f "message=Release ${RELEASE_TAG}" \
+            -f "object=${GITHUB_SHA}" \
+            -f "type=commit" \
+            --jq .sha)"
+          gh api -X DELETE "repos/${GITHUB_REPOSITORY}/git/refs/tags/${RELEASE_TAG}"
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+            -f "ref=refs/tags/${RELEASE_TAG}" \
+            -f "sha=${TAG_OBJECT_SHA}"
+      - name: Create or update GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.resolve-release.outputs.release_tag }}
+        run: |
+          cat > release-notes.md <<EOF
+          # ⚠️ Disclaimer!
+          This is a github release; we highly recommend you to download the plugin from SpigotMC.
 
-          gh release create "$TAG_NAME" "$modern_jar" \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$TARGET_SHA" \
-            --verify-tag \
-            --title "ThJumpPads ${RELEASE_VERSION}" \
-            --generate-notes
-
-          legacy_tag="${TAG_NAME}-legacy"
-          legacy_notes="$(printf '%s\n' \
-            '# ⚠️ Disclaimer!' \
-            'Only install this legacy version if your plugin is intended to support Minecraft versions 1.8 through 1.12.2.' \
-            '' \
-            '# Installation Guide' \
-            "1. Download the jar: \`ThJumpPads-legacy-${RELEASE_VERSION}.jar\`." \
-            '2. Upload it on your `plugins` folder.' \
-            '3. Restart the server')"
-          gh release create "$legacy_tag" "$legacy_jar" \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$TARGET_SHA" \
-            --latest \
-            --title "ThJumpPads ${RELEASE_VERSION}-legacy" \
-            --notes "$legacy_notes"
+          # How to install (from Github)
+          1. Download the jar: \`ThEnderButt-${RELEASE_TAG}.jar\`
+          2. Place it in your server's \`plugins\` folder.
+          3. Restart your server.
+          EOF
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" --title "$RELEASE_TAG" --notes-file release-notes.md
+            gh release upload "$RELEASE_TAG" "release/ThEnderButt-${RELEASE_TAG}.jar" --clobber
+          else
+            gh release create "$RELEASE_TAG" "release/ThEnderButt-${RELEASE_TAG}.jar" \
+              --verify-tag \
+              --title "$RELEASE_TAG" \
+              --notes-file release-notes.md
+          fi
+          RELEASE_ID="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" --jq .id)"
+          DRAFT_STATUS="$(gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+            -F draft=false \
+            --jq .draft)"
+          if [ "$DRAFT_STATUS" != "false" ]; then
+            echo "ERROR: GitHub release '$RELEASE_TAG' was not published publicly."
+            exit 1
+          fi

@@ -31,7 +31,7 @@ storage:
   mysql:
     host: localhost
     port: 3306
-    database: tejumppads
+    database: televeling
     username: root
     password: ""
     use-ssl: true
@@ -42,6 +42,6 @@ storage:
 # Sound settings when a player uses a jump pad.
 sound:
   enabled: true
-  name: "ENTITY_ENDER_DRAGON_FLAP"
+  name: "LEVEL_UP"
   volume: 1.0
   pitch: 1.2

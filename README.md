@@ -6,6 +6,12 @@
 2. Place the jar into the `plugins` folder.
 3. Restart your server.
 
+# Compatibility
+
+The project builds one JAR against the Bukkit/Spigot 1.8.8 API and targets Java 8 bytecode. The GitHub workflow verifies the build with Java 8, 11, 16, 17, 21, and 25. The plugin is intended for Minecraft 1.8.8 through 26.3, using runtime material and sound resolution for names that changed between versions.
+
+The Java version required by the Minecraft server itself still applies. A Java 8-compatible plugin cannot make a server that requires Java 21 or newer start on Java 8. Minecraft 1.20.5 and newer require Java 21; check the server's own requirements for the version you run.
+
 # Dependencies
 
 #### Soft Dependencies:
@@ -69,7 +75,7 @@ storage:
   mysql:
     host: localhost
     port: 3306
-    database: thjumppads
+    database: televeling
     username: root
     password: ""
     use-ssl: true
@@ -80,7 +86,7 @@ storage:
 # Sound settings when a player uses a jump pad.
 sound:
   enabled: true
-  name: "ENTITY_ENDER_DRAGON_FLAP"
+  name: "LEVEL_UP"
   volume: 1.0
   pitch: 1.2
 ```

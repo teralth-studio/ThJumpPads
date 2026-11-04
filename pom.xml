@@ -11,14 +11,14 @@
   <name>ThJumpPads</name>
 
   <properties>
-    <revision>1.0.2</revision>
+    <revision>1.0.0</revision>
     <java.target>8</java.target>
     <maven.compiler.source>1.8</maven.compiler.source>
     <maven.compiler.target>1.8</maven.compiler.target>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <bukkit.api.groupId>org.spigotmc</bukkit.api.groupId>
     <bukkit.api.artifactId>spigot-api</bukkit.api.artifactId>
-    <bukkit.api.version>1.13.2-R0.1-SNAPSHOT</bukkit.api.version>
+    <bukkit.api.version>1.8.8-R0.1-SNAPSHOT</bukkit.api.version>
     <artifact.base>ThJumpPads</artifact.base>
   </properties>
 
@@ -125,23 +125,6 @@
   </build>
 
   <profiles>
-    <profile>
-      <id>legacy</id>
-      <properties>
-        <bukkit.api.version>1.12.2-R0.1-SNAPSHOT</bukkit.api.version>
-        <artifact.base>ThJumpPads-legacy</artifact.base>
-      </properties>
-    </profile>
-    <profile>
-      <id>modern</id>
-      <activation>
-        <activeByDefault>true</activeByDefault>
-      </activation>
-      <properties>
-        <bukkit.api.version>1.13.2-R0.1-SNAPSHOT</bukkit.api.version>
-        <artifact.base>ThJumpPads</artifact.base>
-      </properties>
-    </profile>
     <profile>
       <id>java-8-api-compatibility</id>
       <activation>
