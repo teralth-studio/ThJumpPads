@@ -56,15 +56,19 @@ jobs:
             exit 0
           fi
 
-          if ! RELEASE_TAG="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)"; then
-            echo "::error::Unable to retrieve a published release to use as the fallback version. No release will be created."
+          if ! RELEASE_TAG="$(gh api "repos/${GITHUB_REPOSITORY}/tags?per_page=100" --jq '.[0].name // empty')"; then
+            echo "::error::Unable to retrieve repository tags to use as the fallback version. No release will be created."
+            exit 1
+          fi
+          if [ -z "$RELEASE_TAG" ]; then
+            echo "::error::The repository has no tags to use as the fallback version. No release will be created."
             exit 1
           fi
           if ! printf '%s\n' "$RELEASE_TAG" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
-            echo "ERROR: Latest published release tag '$RELEASE_TAG' is not a semantic version tag."
+            echo "ERROR: Latest repository tag '$RELEASE_TAG' is not a semantic version tag."
             exit 1
           fi
-          echo "No new tag was pushed; the latest published release tag '$RELEASE_TAG' will be recreated at this commit."
+          echo "No new tag was pushed; the latest repository tag '$RELEASE_TAG' will be recreated at this commit."
           echo "run_release=true" >> "$GITHUB_OUTPUT"
           echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "retag=true" >> "$GITHUB_OUTPUT"
