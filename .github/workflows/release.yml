@@ -36,7 +36,7 @@ jobs:
         run: |
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
             RELEASE_TAG="$GITHUB_REF_NAME"
-            if ! printf '%s\n' "$RELEASE_TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            if ! printf '%s\n' "$RELEASE_TAG" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
               echo "ERROR: Tag '$RELEASE_TAG' is not a semantic version tag."
               exit 1
             fi
@@ -47,7 +47,7 @@ jobs:
           fi
 
           git fetch --force --tags origin
-          CURRENT_TAG="$(git tag --points-at "$GITHUB_SHA" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)"
+          CURRENT_TAG="$(git tag --points-at "$GITHUB_SHA" | grep -E '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' | sort -V | tail -n 1 || true)"
           if [ -n "$CURRENT_TAG" ]; then
             echo "A release tag already points to this commit; the tag event will publish it."
             echo "run_release=false" >> "$GITHUB_OUTPUT"
@@ -56,8 +56,11 @@ jobs:
             exit 0
           fi
 
-          RELEASE_TAG="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)"
-          if ! printf '%s\n' "$RELEASE_TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+          if ! RELEASE_TAG="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)"; then
+            echo "::error::Unable to retrieve a published release to use as the fallback version. No release will be created."
+            exit 1
+          fi
+          if ! printf '%s\n' "$RELEASE_TAG" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
             echo "ERROR: Latest published release tag '$RELEASE_TAG' is not a semantic version tag."
             exit 1
           fi
@@ -112,8 +115,8 @@ jobs:
       - name: Upload release jar
         uses: actions/upload-artifact@v4
         with:
-          name: thenderbutt-release-jar
-          path: target/ThEnderButt-${{ needs.resolve-release.outputs.release_tag }}.jar
+          name: thjumppads-release-jar
+          path: target/ThJumpPads-${{ needs.resolve-release.outputs.release_tag }}.jar
           if-no-files-found: error
 
   release:
@@ -131,7 +134,7 @@ jobs:
       - name: Download release jar
         uses: actions/download-artifact@v4
         with:
-          name: thenderbutt-release-jar
+          name: thjumppads-release-jar
           path: release
       - name: Recreate latest tag when needed
         if: needs.resolve-release.outputs.retag == 'true'
@@ -162,15 +165,20 @@ jobs:
           This is a github release; we highly recommend you to download the plugin from SpigotMC.
 
           # How to install (from Github)
-          1. Download the jar: \`ThEnderButt-${RELEASE_TAG}.jar\`
+          1. Download the jar: \`ThJumpPads-${RELEASE_TAG}.jar\`
           2. Place it in your server's \`plugins\` folder.
           3. Restart your server.
           EOF
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release edit "$RELEASE_TAG" --title "$RELEASE_TAG" --notes-file release-notes.md
-            gh release upload "$RELEASE_TAG" "release/ThEnderButt-${RELEASE_TAG}.jar" --clobber
+            OLD_JAR_ASSET_IDS="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" \
+              --jq '.assets[] | select(.name | ascii_downcase | endswith(".jar")) | .id')"
+            for ASSET_ID in $OLD_JAR_ASSET_IDS; do
+              gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/assets/${ASSET_ID}"
+            done
+            gh release upload "$RELEASE_TAG" "release/ThJumpPads-${RELEASE_TAG}.jar" --clobber
           else
-            gh release create "$RELEASE_TAG" "release/ThEnderButt-${RELEASE_TAG}.jar" \
+            gh release create "$RELEASE_TAG" "release/ThJumpPads-${RELEASE_TAG}.jar" \
               --verify-tag \
               --title "$RELEASE_TAG" \
               --notes-file release-notes.md
@@ -181,5 +189,11 @@ jobs:
             --jq .draft)"
           if [ "$DRAFT_STATUS" != "false" ]; then
             echo "ERROR: GitHub release '$RELEASE_TAG' was not published publicly."
+            exit 1
+          fi
+          JAR_ASSETS="$(gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+            --jq '[.assets[] | select(.name | ascii_downcase | endswith(".jar")) | .name] | join(",")')"
+          if [ "$JAR_ASSETS" != "ThJumpPads-${RELEASE_TAG}.jar" ]; then
+            echo "ERROR: Expected exactly one plugin JAR, 'ThJumpPads-${RELEASE_TAG}.jar'; found: '${JAR_ASSETS}'."
             exit 1
           fi
