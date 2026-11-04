@@ -127,7 +127,7 @@ world-disabled: "&cJumpPads is not enabled in this world."
 
 # Plugin Metrics
 
-[![bStats](images/bstats-charts.svg)](https://bstats.org/plugin/bukkit/ThJumpPads/35094)
+[![bStats](https://bstats.org/signatures/bukkit/ThJumpPads.svg)
 
 # Support
 For support join our [Discord server](https://discord.gg/n6uDZTJ7QR) or open an issue on GitHub.
